@@ -82,7 +82,49 @@ def segment(binary_img, min_area_ratio=0.001, overlap_thresh=0.5, target_size=45
     return chars, merged
 
 
-if __name__ == '__main__':
+def split_lines(binary_img, min_gap_ratio=0.05):
+    """split image into horizontal lines using projection profile.
+    looks for horizontal gaps (rows with no/few white pixels) to find line breaks."""
+    h, w = binary_img.shape
+    # horizontal projection - sum white pixels per row
+    projection = np.sum(binary_img, axis=1) / 255
+
+    # threshold - rows with very few white pixels are gaps
+    row_threshold = w * 0.01
+    is_content = projection > row_threshold
+
+    # find line regions (contiguous blocks of content rows)
+    lines = []
+    in_line = False
+    start = 0
+
+    for i in range(h):
+        if is_content[i] and not in_line:
+            start = i
+            in_line = True
+        elif not is_content[i] and in_line:
+            lines.append((start, i))
+            in_line = False
+    if in_line:
+        lines.append((start, h))
+
+    # filter out tiny strips (noise)
+    min_height = h * 0.05
+    lines = [(y1, y2) for y1, y2 in lines if (y2 - y1) > min_height]
+
+    if len(lines) <= 1:
+        # single line or couldn't split - return whole image
+        return [binary_img]
+
+    # crop each line with a bit of padding
+    pad = 5
+    result = []
+    for y1, y2 in lines:
+        y1 = max(0, y1 - pad)
+        y2 = min(h, y2 + pad)
+        result.append(binary_img[y1:y2, :])
+
+    return result
     import sys
     import os
     from preprocess import preprocess
