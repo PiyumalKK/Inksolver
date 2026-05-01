@@ -30,6 +30,7 @@ Photo → Grayscale → Threshold → Morphology Cleanup → Segment Characters 
 |------|------------|--------|
 | 0 | Project setup | Done |
 | 1 | Preprocessing | Done |
+| 2 | Segmentation | Done |
 
 ---
 
@@ -52,3 +53,18 @@ The pipeline:
 Output: clean binary image ready for character segmentation.
 
 Files: `notebooks/01_preprocessing.ipynb`, `src/preprocess.py`
+
+## Phase 2 — Character Segmentation
+
+Now that we have a clean binary image, we need to chop it up into individual characters.
+
+The approach:
+1. **Find contours** — `cv2.findContours` with `RETR_EXTERNAL` to grab only the outermost blobs. Each connected white region = one contour
+2. **Bounding boxes** — get the rectangle around each contour. Filter out anything smaller than 0.1% of the image area (noise specks that survived preprocessing)
+3. **Merge overlapping boxes** — this was the tricky part. The `=` sign shows up as two separate horizontal bars, so we get two contours for one symbol. Same issue with `i`, `j`, etc. Fix: if two boxes overlap horizontally by more than 50% of the smaller box's width, merge them into one bigger box
+4. **Sort left to right** — sort by x coordinate so characters are in reading order
+5. **Crop and resize** — cut each character out, pad it to a square (so it doesn't get stretched), then resize to 45x45. The padding preserves aspect ratio which matters for the CNN later
+
+The `=` merging logic took some trial and error. First tried just checking if boxes are "close" vertically, but that merged things that shouldn't be merged. The horizontal overlap check works much better — if two contours are roughly in the same x range, they're probably parts of the same symbol.
+
+Files: `notebooks/02_segmentation.ipynb`, `src/segment.py`
