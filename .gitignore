@@ -1,0 +1,23 @@
+# Project plan (private)
+PROJECT_PLAN.md
+
+# Data files (too large for git)
+data/dataset/
+data/raw_samples/*.jpg
+data/raw_samples/*.png
+data/processed/
+models/*.h5
+models/*.onnx
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# OS
+Thumbs.db
+.DS_Store
