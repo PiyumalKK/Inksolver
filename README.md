@@ -38,6 +38,13 @@ python src/segment.py data/raw_samples/eq1.png
 # saves character crops to data/segments/
 ```
 
+### Recognize symbols
+Runs preprocessing + segmentation + CNN prediction end to end.
+```bash
+python src/model.py data/raw_samples/eq1.png
+# prints recognized symbols with confidence scores
+```
+
 ### Notebooks
 The `notebooks/` folder has step-by-step Jupyter notebooks that walk through each stage with visualizations.
 ```bash
@@ -61,6 +68,7 @@ jupyter notebook notebooks/
 | 0 | Project setup | Done |
 | 1 | Preprocessing | Done |
 | 2 | Segmentation | Done |
+| 3 | CNN training | Done |
 
 ---
 
@@ -98,3 +106,34 @@ The approach:
 The `=` merging logic took some trial and error. First tried just checking if boxes are "close" vertically, but that merged things that shouldn't be merged. The horizontal overlap check works much better — if two contours are roughly in the same x range, they're probably parts of the same symbol.
 
 Files: `notebooks/02_segmentation.ipynb`, `src/segment.py`
+
+## Phase 3 — CNN Symbol Classifier
+
+This is the "brain" — a CNN that looks at a 45x45 character crop and tells us what symbol it is.
+
+Used the **HASYv2** dataset (~168k images of handwritten symbols). Filtered it down to 18 classes we need: digits 0-9, operators (+, -, ×, ÷), variables (x, y, X, Y). Note: `=` wasn't in HASYv2 so we handle that separately in the parser.
+
+The dataset was pretty imbalanced — `times` had 1509 samples but `X` only had 54.
+
+**Architecture:**
+- 3 conv blocks: Conv2D → BatchNorm → ReLU → MaxPool → Dropout
+- Filters: 32 → 64 → 128
+- Dense: 256 → softmax
+- ~965k parameters
+
+**Training:**
+- Data augmentation: small rotations (±10°), shifts (10%), zoom (10%), shear
+- Adam optimizer with ReduceLROnPlateau — LR started at 0.001, dropped to 0.0005 around epoch 7, then 0.00025 around epoch 30
+- EarlyStopping with patience=10
+- Trained on Google Colab T4 GPU, 50 epochs
+
+First few epochs were scary — val accuracy was stuck at 3.6% while train was climbing fast. Looked like total overfitting. But ReduceLROnPlateau kicked in and dropped the learning rate, and after that val accuracy slowly caught up. By epoch 15 it crossed 90%, and by epoch 50 it settled at **95.8%** val accuracy with basically no train/val gap.
+
+**Weak spots from confusion matrix:**
+- `x` (lowercase) got 0% — completely confused with `X` and `times` (×). Makes sense, they all look like an X
+- `X` recall was only 55%
+- We'll handle the x/X/times ambiguity in the equation parser — context tells you if it's a variable or multiplication
+
+The `src/model.py` module wraps the trained model for inference — load once, then predict on character crops.
+
+Files: `notebooks/03_cnn_training_v1.ipynb` (Colab), `src/model.py`, `models/symbol_classifier.h5`, `models/label_map.json`
