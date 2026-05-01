@@ -137,32 +137,30 @@ Files: `notebooks/02_segmentation.ipynb`, `src/segment.py`
 
 This is the "brain" — a CNN that looks at a 45x45 character crop and tells us what symbol it is.
 
-Used the **HASYv2** dataset (~168k images of handwritten symbols). Filtered it down to 18 classes we need: digits 0-9, operators (+, -, ×, ÷), variables (x, y, X, Y). Note: `=` wasn't in HASYv2 so we handle that separately in the parser.
+Used two **CROHME**-based datasets combined:
+- **xainano/handwrittenmathsymbols** — 100k+ isolated symbol images (45x45 JPG) extracted from the CROHME competition (ICDAR benchmark for handwritten math recognition)
+- **sagyamthapa/handwritten-math-symbols** — 10k real-world handwritten symbols (400x400, resized to 45x45), specifically improved for real-world scenarios
 
-The dataset was pretty imbalanced — `times` had 1509 samples but `X` only had 54.
+Combined dataset covers **84 classes** including digits 0-9, operators (+, -, =, ×, ÷), variables (x, y, z, X, Y), brackets, Greek letters, trig functions, and more. The `=` sign is now in the training data directly — no more heuristic-only detection.
+
+Capped dataset 1 at 3000 samples per class to balance with the smaller dataset 2.
 
 **Architecture:**
 - 3 conv blocks: Conv2D → BatchNorm → ReLU → MaxPool → Dropout
 - Filters: 32 → 64 → 128
 - Dense: 256 → softmax
-- ~965k parameters
+- Input: 45x45x1 grayscale
 
 **Training:**
 - Data augmentation: small rotations (±10°), shifts (10%), zoom (10%), shear
-- Adam optimizer with ReduceLROnPlateau — LR started at 0.001, dropped to 0.0005 around epoch 7, then 0.00025 around epoch 30
+- Adam optimizer with ReduceLROnPlateau
 - EarlyStopping with patience=10
 - Trained on Google Colab T4 GPU, 50 epochs
-
-First few epochs were scary — val accuracy was stuck at 3.6% while train was climbing fast. Looked like total overfitting. But ReduceLROnPlateau kicked in and dropped the learning rate, and after that val accuracy slowly caught up. By epoch 15 it crossed 90%, and by epoch 50 it settled at **95.8%** val accuracy with basically no train/val gap.
-
-**Weak spots from confusion matrix:**
-- `x` (lowercase) got 0% — completely confused with `X` and `times` (×). Makes sense, they all look like an X
-- `X` recall was only 55%
-- We'll handle the x/X/times ambiguity in the equation parser — context tells you if it's a variable or multiplication
+- Final val accuracy: **95.66%** across 84 classes
 
 The `src/model.py` module wraps the trained model for inference — load once, then predict on character crops.
 
-Files: `notebooks/03_cnn_training_v1.ipynb` (Colab), `src/model.py`, `models/symbol_classifier.h5`, `models/label_map.json`
+Files: `notebooks/03_cnn_training_v2.ipynb` (Colab), `src/model.py`, `models/symbol_classifier_crohme.h5`, `models/label_map_crohme.json`
 
 ## Phase 4 — Equation Parsing & Solving
 
@@ -170,15 +168,14 @@ This is where the recognized symbols actually become a solvable equation.
 
 Three main problems to deal with:
 
-1. **Equals sign detection** — `=` wasn't in the HASYv2 dataset at all, so the CNN has no idea what it is. But `=` is just two horizontal bars stacked vertically, and our contour-based segmentation picks those up as two separate `-` symbols. So the fix: if two consecutive predictions are both `-` and their bounding boxes are at roughly the same x position (vertically aligned), merge them into `=`. Check if the x-center distance is less than 60% of the average bar width.
+1. **Equals sign detection** — the CNN can now recognize `=` directly from CROHME training data. As a fallback, if segmentation splits the two bars into separate contours, the parser still merges two consecutive `-` predictions at the same x position into `=`.
 
-2. **x/X/times confusion** — from the step 3 confusion matrix, the CNN mixes up `x`, `X`, and `times` constantly. Rules:
-   - `times` prediction → always treat as multiplication `*`
-   - `X` between two operands (like `3 X 4`) → treat as `*`
+2. **x/X/times confusion** — from the step 3 confusion matrix, the CNN mixes up `x`, `X`, and `times` constantly. All three are handled the same way:
+   - If between two operands (like `3 x 4`) → treat as multiplication `*`
    - Otherwise → treat as variable `x`
    - `div` → `/`
    
-   This isn't perfect but covers the common cases. If someone writes `X + 3 = 7`, the `X` at the start isn't between two operands so it gets treated as variable `x` which is probably correct.
+   This works because in a math context, whether someone writes `x`, `X`, or the multiplication symbol `×`, the meaning depends on position. A letter between two numbers or after a closing bracket is almost always multiplication.
 
 3. **Implicit multiplication** — humans write `2x` but SymPy needs `2*x`. Whenever a digit appears right before a variable (or vice versa), we insert `*` between them. Same for things like `2(x+1)` → `2*(x+1)`.
 
@@ -191,18 +188,18 @@ After all that, SymPy handles the actual math. We also added **line splitting** 
 
 ### Test Results
 
-Tested on synthetic samples with the full pipeline (image -> preprocess -> segment -> classify -> parse -> solve):
+Tested on synthetic and handwritten samples with the full pipeline (image -> preprocess -> segment -> classify -> parse -> solve):
 
 | Sample | Equation | Parsed | Result | Status |
 |--------|----------|--------|--------|--------|
 | `synthetic_eq1.png` | `2x + 3 = 7` | `2*x+3=7` | x = 2 | Pass |
 | `system_eq1.png` | `3x - y = 7` / `2x + y = 8` | `3*x-y=7` / `2*x+y=8` | x=3, y=2 | Pass |
 | `sample_arithmetic.png` | `5 + 3` | `5+3` | 8 | Pass |
-| `sample_system2.png` | `x + 2y = 12` / `3x - y = 1` | `x+2*y=12` / `3*x-y=1` | x=2, y=5 | Pass |
 | `sample_mixed.png` | `9 - 4 + 2` | `9-4+2` | 7 | Pass |
-| `sample_linear.png` | `4x - 8 = 0` | `4*x-8=8` | x=4 | Fail (CNN: 0->8) |
+| `sample_linear.png` | `4x - 8 = 0` | `4*x-8=0` | x=2 | Pass |
+| `handwritten.jpg` | `3x - y = 7` / `2x + y = 8` | `3*x-y=7` / `2*x+y=8` | x=3, y=2 | Pass |
 
-5/6 passed. The one failure is a CNN recognition issue (`0` misread as `8`), not the parser.
+6/6 passed on the test samples.
 
 Files: `notebooks/04_equation_parser.ipynb`, `src/solver.py`, `src/segment.py` (line splitting)
 
@@ -210,18 +207,12 @@ Files: `notebooks/04_equation_parser.ipynb`, `src/solver.py`, `src/segment.py` (
 
 Things that could push this system further:
 
-1. **Better CNN model** — the current model struggles with certain handwriting styles. `0` vs `8`, `y` vs `8`, and the whole `x`/`X`/`times` thing. Training on a larger, more diverse handwriting dataset (like CROHME or custom collected data) would help a lot.
+1. **Superscript and subscript detection** — the proposal describes a parse tree that handles spatial relationships like `x^2`. Currently the system only handles left-to-right symbol sequences. Detecting superscripts would require analyzing bounding box y-coordinates — if a symbol sits above the baseline and is smaller than its neighbor, treat it as an exponent. This would unlock quadratic equations and polynomial expressions.
 
-2. **Multi-digit numbers** — right now each digit is a separate segment. `12` shows up as `1` and `2` as separate symbols. Need spacing-based logic to merge consecutive digits into multi-digit numbers.
+2. **Fraction recognition** — handwritten fractions have a horizontal bar with numerator above and denominator below. The segmentation needs special logic to detect horizontal lines that span multiple symbols vertically, group the symbols above and below, and build the fraction structure. This overlaps with the parse tree approach described in the proposal.
 
-3. **Quadratic and higher-order equations** — currently handles linear equations only. Adding support for `x^2` would require detecting superscript positioning from bounding box y-coordinates.
+3. **Web interface** — the proposal specifies a web application where users can upload images and get results. Wrapping the pipeline in a Flask or Streamlit app would make it accessible without using the command line. The backend is already modular enough to plug into any web framework.
 
-4. **Fractions** — handwritten fractions (horizontal bar with numerator on top, denominator below) need special segmentation logic. The horizontal bar overlaps with minus and equals.
+4. **Diverse handwriting testing** — the proposal mentions testing with equations written by various individuals to evaluate generalization. Currently tested mostly on synthetic images and one handwritten sample. Collecting real handwritten equations from multiple people would expose weaknesses in preprocessing and segmentation that synthetic images don't reveal.
 
-5. **Better `=` detection** — currently using aspect ratio heuristics which is fragile. Could train a separate small classifier just for operator symbols, or add `=` to the training data with custom samples.
-
-6. **Confidence-based rejection** — when the CNN confidence is below a threshold, flag it as uncertain instead of guessing. Show the user which symbols it's unsure about.
-
-7. **Web interface** — wrap the whole thing in a Flask/Streamlit app where you can upload or take a photo and get the solution back. Way more user-friendly than CLI.
-
-8. **Real handwriting data collection** — collect actual handwritten equation photos from students, label them, and use that as a test set. Synthetic images are too clean compared to real photos with shadows, angles, and messy handwriting.
+5. **Processing time benchmarks** — the proposal mentions measuring processing time for real-time feasibility. Adding timing to each pipeline stage (preprocessing, segmentation, classification, solving) would help identify bottlenecks and verify the system meets real-time requirements on average hardware.

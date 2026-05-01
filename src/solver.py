@@ -4,13 +4,15 @@ import sympy as sp
 
 def detect_equals(predictions, boxes):
     """
-    the CNN cant recognize '=' since it wasnt in HASYv2.
-    two ways it can show up:
-    1) segmentation keeps the two bars separate -> two '-' predictions stacked vertically
-    2) segmentation merges them -> one wide box predicted as '-' or 'div'
+    fallback '=' detection for when segmentation splits the two bars.
+    the CNN can recognize '=' directly, but sometimes segmentation keeps
+    the two bars separate -> two '-' predictions stacked vertically.
     """
     if not predictions:
         return predictions, boxes
+
+    # check if model already found '=' — if so, skip wide-bar heuristic
+    has_equals = any(p[0] == '=' for p in predictions)
 
     new_preds = []
     new_boxes = []
@@ -44,21 +46,13 @@ def detect_equals(predictions, boxes):
                 skip_next = True
                 continue
 
-        # case 2: merged into one wide box - CNN sees it as '-' or 'div'
-        # '=' is wide but not super thin like '-'. aspect between 1.5 and 4
-        if label in ('-', 'div') and h > 0:
+        # case 2: wide bar heuristic — only if model didn't find '=' already
+        if not has_equals and label in ('-', 'div') and h > 0:
             aspect = w / h
             if 1.5 < aspect < 4.0:
                 new_preds.append(('=', conf))
                 new_boxes.append(boxes[i])
                 continue
-
-        # case 3: '+' often gets read as 'div' — but '+' has a squarish box (aspect ~1)
-        # real division sign is taller than wide
-        if label == 'div' and h > 0 and w / h < 1.3:
-            new_preds.append(('+', conf))
-            new_boxes.append(boxes[i])
-            continue
 
         new_preds.append((label, conf))
         new_boxes.append(boxes[i])
@@ -84,11 +78,8 @@ def resolve_ambiguity(predictions):
             prev_is_operand = prev is not None and (prev.isdigit() or prev in ('x', 'y', ')'))
             next_is_operand = nxt is not None and (nxt.isdigit() or nxt in ('x', 'y', '('))
 
-            if label == 'times':
-                # times is always multiplication
-                resolved.append(('*', confs[i]))
-            elif prev_is_operand and next_is_operand and label == 'X':
-                # X between two operands = multiply
+            if prev_is_operand and next_is_operand:
+                # between two operands = multiplication
                 resolved.append(('*', confs[i]))
             else:
                 # treat as variable x
