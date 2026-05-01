@@ -207,12 +207,12 @@ Files: `notebooks/04_equation_parser.ipynb`, `src/solver.py`, `src/segment.py` (
 
 Things that could push this system further:
 
-1. **Superscript and subscript detection** — the proposal describes a parse tree that handles spatial relationships like `x^2`. Currently the system only handles left-to-right symbol sequences. Detecting superscripts would require analyzing bounding box y-coordinates — if a symbol sits above the baseline and is smaller than its neighbor, treat it as an exponent. This would unlock quadratic equations and polynomial expressions.
+1. **Superscript and subscript detection** — right now the system only reads symbols left to right. To handle things like `x^2`, I'd need to check bounding box y-coordinates — if a symbol sits above the baseline and is smaller than its neighbor, it's probably an exponent. That would open up quadratic and polynomial equations.
 
-2. **Fraction recognition** — handwritten fractions have a horizontal bar with numerator above and denominator below. The segmentation needs special logic to detect horizontal lines that span multiple symbols vertically, group the symbols above and below, and build the fraction structure. This overlaps with the parse tree approach described in the proposal.
+2. **Fraction recognition** — fractions have a horizontal bar with stuff above and below it. The segmentation would need to detect wide horizontal lines, then group symbols into numerator and denominator. Tricky because the fraction bar looks like minus and equals.
 
-3. **Web interface** — the proposal specifies a web application where users can upload images and get results. Wrapping the pipeline in a Flask or Streamlit app would make it accessible without using the command line. The backend is already modular enough to plug into any web framework.
+3. **Web interface** — right now it's CLI only. A simple Flask or Streamlit frontend where you upload a photo and get the answer back would make it way more usable. The backend is already modular enough to plug into any framework.
 
-4. **Diverse handwriting testing** — the proposal mentions testing with equations written by various individuals to evaluate generalization. Currently tested mostly on synthetic images and one handwritten sample. Collecting real handwritten equations from multiple people would expose weaknesses in preprocessing and segmentation that synthetic images don't reveal.
+4. **More handwriting samples** — most of the test images are synthetic. Need to collect real handwritten equations from different people to properly test how well the preprocessing and segmentation hold up with messy handwriting, bad lighting, angled photos etc.
 
-5. **Processing time benchmarks** — the proposal mentions measuring processing time for real-time feasibility. Adding timing to each pipeline stage (preprocessing, segmentation, classification, solving) would help identify bottlenecks and verify the system meets real-time requirements on average hardware.
+5. **Processing time benchmarks** — haven't measured how fast each stage runs yet. Adding timing to preprocessing, segmentation, classification and solving would show where the bottlenecks are and whether it's fast enough for real-time use.
