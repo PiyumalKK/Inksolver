@@ -3,12 +3,8 @@ PROJECT_PLAN.md
 
 # Data files (too large for git)
 data/dataset/
-data/raw_samples/*.jpg
-data/raw_samples/*.png
 data/processed/
 data/segments/
-models/*.h5
-models/*.onnx
 
 # Python
 __pycache__/

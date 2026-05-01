@@ -19,7 +19,24 @@ Photo → Grayscale → Threshold → Morphology Cleanup → Segment Characters 
 ```bash
 git clone https://github.com/PiyumalKK/Inksolver.git
 cd Inksolver
-pip install opencv-python numpy matplotlib
+pip install opencv-python numpy matplotlib tensorflow sympy
+```
+
+## Quick Test
+
+```bash
+python src/solver.py data/raw_samples/synthetic_eq1.png
+```
+
+This runs the full pipeline on a sample image of `2x + 3 = 7` and prints:
+```
+equation: 2*x+3=7
+x = [2]
+```
+
+To test with your own image, just pass the path:
+```bash
+python src/solver.py path/to/your/equation.png
 ```
 
 ## Usage
@@ -43,6 +60,13 @@ Runs preprocessing + segmentation + CNN prediction end to end.
 ```bash
 python src/model.py data/raw_samples/eq1.png
 # prints recognized symbols with confidence scores
+```
+
+### Solve equation
+Full pipeline: preprocess -> segment -> classify -> parse -> solve.
+```bash
+python src/solver.py data/raw_samples/eq1.png
+# prints the equation and solution
 ```
 
 ### Notebooks
@@ -69,6 +93,7 @@ jupyter notebook notebooks/
 | 1 | Preprocessing | Done |
 | 2 | Segmentation | Done |
 | 3 | CNN training | Done |
+| 4 | Equation parsing & solving | Done |
 
 ---
 
@@ -137,3 +162,30 @@ First few epochs were scary — val accuracy was stuck at 3.6% while train was c
 The `src/model.py` module wraps the trained model for inference — load once, then predict on character crops.
 
 Files: `notebooks/03_cnn_training_v1.ipynb` (Colab), `src/model.py`, `models/symbol_classifier.h5`, `models/label_map.json`
+
+## Phase 4 — Equation Parsing & Solving
+
+This is where the recognized symbols actually become a solvable equation.
+
+Three main problems to deal with:
+
+1. **Equals sign detection** — `=` wasn't in the HASYv2 dataset at all, so the CNN has no idea what it is. But `=` is just two horizontal bars stacked vertically, and our contour-based segmentation picks those up as two separate `-` symbols. So the fix: if two consecutive predictions are both `-` and their bounding boxes are at roughly the same x position (vertically aligned), merge them into `=`. Check if the x-center distance is less than 60% of the average bar width.
+
+2. **x/X/times confusion** — from the step 3 confusion matrix, the CNN mixes up `x`, `X`, and `times` constantly. Rules:
+   - `times` prediction → always treat as multiplication `*`
+   - `X` between two operands (like `3 X 4`) → treat as `*`
+   - Otherwise → treat as variable `x`
+   - `div` → `/`
+   
+   This isn't perfect but covers the common cases. If someone writes `X + 3 = 7`, the `X` at the start isn't between two operands so it gets treated as variable `x` which is probably correct.
+
+3. **Implicit multiplication** — humans write `2x` but SymPy needs `2*x`. Whenever a digit appears right before a variable (or vice versa), we insert `*` between them. Same for things like `2(x+1)` → `2*(x+1)`.
+
+After all the preprocessing, the equation string goes to **SymPy** which handles the actual math:
+- Pure arithmetic (`3+4`) → evaluates to `7`
+- Linear equations (`2*x+3=7`) → solves for `x=2`
+- Verification (`3+4=7`) → checks if both sides are equal
+
+Tested with simulated CNN outputs since we don't have real end-to-end data yet. The full pipeline integration comes in step 5.
+
+Files: `notebooks/04_equation_parser.ipynb`, `src/solver.py`
