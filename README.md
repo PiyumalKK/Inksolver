@@ -207,12 +207,18 @@ Files: `notebooks/04_equation_parser.ipynb`, `src/solver.py`, `src/segment.py` (
 
 Things that could push this system further:
 
-1. **Superscript and subscript detection** — the proposal describes a parse tree that handles spatial relationships like `x^2`. Currently the system only handles left-to-right symbol sequences. Detecting superscripts would require analyzing bounding box y-coordinates — if a symbol sits above the baseline and is smaller than its neighbor, treat it as an exponent. This would unlock quadratic equations and polynomial expressions.
+1. **Exponent and subscript handling** — the system reads left to right only. To support `x^2` or `a_1`, need to compare bounding box y-positions — if a symbol is above the baseline and smaller, treat it as a power. That opens up quadratics, polynomials, and indexed variables.
 
-2. **Fraction recognition** — handwritten fractions have a horizontal bar with numerator above and denominator below. The segmentation needs special logic to detect horizontal lines that span multiple symbols vertically, group the symbols above and below, and build the fraction structure. This overlaps with the parse tree approach described in the proposal.
+2. **Fraction support** — fractions need the segmentation to detect wide horizontal bars and group symbols above/below into numerator and denominator. Hard part is the fraction bar looks identical to minus and equals.
 
-3. **Web interface** — the proposal specifies a web application where users can upload images and get results. Wrapping the pipeline in a Flask or Streamlit app would make it accessible without using the command line. The backend is already modular enough to plug into any web framework.
+3. **Multi-digit number merging** — right now `12` gets segmented as two separate digits `1` and `2`. Could use spacing between bounding boxes — if two consecutive digit boxes are close enough compared to the average gap, merge them into one number.
 
-4. **Diverse handwriting testing** — the proposal mentions testing with equations written by various individuals to evaluate generalization. Currently tested mostly on synthetic images and one handwritten sample. Collecting real handwritten equations from multiple people would expose weaknesses in preprocessing and segmentation that synthetic images don't reveal.
+4. **Perspective and rotation correction** — real phone photos are often tilted or taken at an angle. Adding automatic rotation correction (using Hough line detection to find the baseline) and perspective transform would make preprocessing way more robust for real-world use.
 
-5. **Processing time benchmarks** — the proposal mentions measuring processing time for real-time feasibility. Adding timing to each pipeline stage (preprocessing, segmentation, classification, solving) would help identify bottlenecks and verify the system meets real-time requirements on average hardware.
+5. **Confidence threshold and re-prediction** — when the CNN confidence drops below a threshold, instead of just guessing, try alternative interpretations. For example if a symbol is predicted as `0` with 55% confidence and `o` with 40%, use the equation context to pick the right one.
+
+6. **Parentheses and nested expressions** — the parser handles flat equations but doesn't properly deal with nested brackets like `2(x+1) = 6`. Need bracket matching logic that groups sub-expressions before building the equation string.
+
+7. **Web interface** — a Flask or Streamlit frontend where you upload a photo and get the answer. The backend modules are already independent enough to plug into any web framework without changes.
+
+8. **Real photo preprocessing** — shadow removal, uneven lighting compensation, and background cleanup for photos taken in classrooms or on desks. The current CLAHE handles some of this but a dedicated shadow detection step would help a lot with real-world images.
