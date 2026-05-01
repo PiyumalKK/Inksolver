@@ -14,6 +14,36 @@ Photo → Grayscale → Threshold → Morphology Cleanup → Segment Characters 
 - **SymPy** — Equation solving
 - **Python 3.10+**
 
+## Setup
+
+```bash
+git clone https://github.com/PiyumalKK/Inksolver.git
+cd Inksolver
+pip install opencv-python numpy matplotlib
+```
+
+## Usage
+
+### Preprocess an image
+Converts a photo of a handwritten equation into a clean binary image.
+```bash
+python src/preprocess.py data/raw_samples/eq1.png
+# saves output_binary.png
+```
+
+### Segment characters
+Splits the equation into individual character images (sorted left to right).
+```bash
+python src/segment.py data/raw_samples/eq1.png
+# saves character crops to data/segments/
+```
+
+### Notebooks
+The `notebooks/` folder has step-by-step Jupyter notebooks that walk through each stage with visualizations.
+```bash
+jupyter notebook notebooks/
+```
+
 ## Project Structure
 ```
 ├── notebooks/          # Step-by-step Jupyter notebooks
