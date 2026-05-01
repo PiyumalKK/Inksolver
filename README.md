@@ -207,16 +207,12 @@ Files: `notebooks/04_equation_parser.ipynb`, `src/solver.py`, `src/segment.py` (
 
 Things that could push this system further:
 
-1. **Better CNN model** — the current CROHME model handles 84 classes at 95.66% accuracy. Could improve further with more real-world handwriting data, or by fine-tuning on custom collected samples specific to our use case.
+1. **Superscript and subscript detection** — the proposal describes a parse tree that handles spatial relationships like `x^2`. Currently the system only handles left-to-right symbol sequences. Detecting superscripts would require analyzing bounding box y-coordinates — if a symbol sits above the baseline and is smaller than its neighbor, treat it as an exponent. This would unlock quadratic equations and polynomial expressions.
 
-2. **Multi-digit numbers** — right now each digit is a separate segment. `12` shows up as `1` and `2` as separate symbols. Need spacing-based logic to merge consecutive digits into multi-digit numbers.
+2. **Fraction recognition** — handwritten fractions have a horizontal bar with numerator above and denominator below. The segmentation needs special logic to detect horizontal lines that span multiple symbols vertically, group the symbols above and below, and build the fraction structure. This overlaps with the parse tree approach described in the proposal.
 
-3. **Quadratic and higher-order equations** — currently handles linear equations only. Adding support for `x^2` would require detecting superscript positioning from bounding box y-coordinates.
+3. **Web interface** — the proposal specifies a web application where users can upload images and get results. Wrapping the pipeline in a Flask or Streamlit app would make it accessible without using the command line. The backend is already modular enough to plug into any web framework.
 
-4. **Fractions** — handwritten fractions (horizontal bar with numerator on top, denominator below) need special segmentation logic. The horizontal bar overlaps with minus and equals.
+4. **Diverse handwriting testing** — the proposal mentions testing with equations written by various individuals to evaluate generalization. Currently tested mostly on synthetic images and one handwritten sample. Collecting real handwritten equations from multiple people would expose weaknesses in preprocessing and segmentation that synthetic images don't reveal.
 
-5. **Confidence-based rejection** — when the CNN confidence is below a threshold, flag it as uncertain instead of guessing. Show the user which symbols it's unsure about.
-
-6. **Web interface** — wrap the whole thing in a Flask/Streamlit app where you can upload or take a photo and get the solution back. Way more user-friendly than CLI.
-
-7. **Real handwriting data collection** — collect actual handwritten equation photos from students, label them, and use that as a test set. Synthetic images are too clean compared to real photos with shadows, angles, and messy handwriting.
+5. **Processing time benchmarks** — the proposal mentions measuring processing time for real-time feasibility. Adding timing to each pipeline stage (preprocessing, segmentation, classification, solving) would help identify bottlenecks and verify the system meets real-time requirements on average hardware.
