@@ -207,12 +207,18 @@ Files: `notebooks/04_equation_parser.ipynb`, `src/solver.py`, `src/segment.py` (
 
 Things that could push this system further:
 
-1. **Superscript and subscript detection** — right now the system only reads symbols left to right. To handle things like `x^2`, I'd need to check bounding box y-coordinates — if a symbol sits above the baseline and is smaller than its neighbor, it's probably an exponent. That would open up quadratic and polynomial equations.
+1. **Exponent and subscript handling** — the system reads left to right only. To support `x^2` or `a_1`, need to compare bounding box y-positions — if a symbol is above the baseline and smaller, treat it as a power. That opens up quadratics, polynomials, and indexed variables.
 
-2. **Fraction recognition** — fractions have a horizontal bar with stuff above and below it. The segmentation would need to detect wide horizontal lines, then group symbols into numerator and denominator. Tricky because the fraction bar looks like minus and equals.
+2. **Fraction support** — fractions need the segmentation to detect wide horizontal bars and group symbols above/below into numerator and denominator. Hard part is the fraction bar looks identical to minus and equals.
 
-3. **Web interface** — right now it's CLI only. A simple Flask or Streamlit frontend where you upload a photo and get the answer back would make it way more usable. The backend is already modular enough to plug into any framework.
+3. **Multi-digit number merging** — right now `12` gets segmented as two separate digits `1` and `2`. Could use spacing between bounding boxes — if two consecutive digit boxes are close enough compared to the average gap, merge them into one number.
 
-4. **More handwriting samples** — most of the test images are synthetic. Need to collect real handwritten equations from different people to properly test how well the preprocessing and segmentation hold up with messy handwriting, bad lighting, angled photos etc.
+4. **Perspective and rotation correction** — real phone photos are often tilted or taken at an angle. Adding automatic rotation correction (using Hough line detection to find the baseline) and perspective transform would make preprocessing way more robust for real-world use.
 
-5. **Processing time benchmarks** — haven't measured how fast each stage runs yet. Adding timing to preprocessing, segmentation, classification and solving would show where the bottlenecks are and whether it's fast enough for real-time use.
+5. **Confidence threshold and re-prediction** — when the CNN confidence drops below a threshold, instead of just guessing, try alternative interpretations. For example if a symbol is predicted as `0` with 55% confidence and `o` with 40%, use the equation context to pick the right one.
+
+6. **Parentheses and nested expressions** — the parser handles flat equations but doesn't properly deal with nested brackets like `2(x+1) = 6`. Need bracket matching logic that groups sub-expressions before building the equation string.
+
+7. **Web interface** — a Flask or Streamlit frontend where you upload a photo and get the answer. The backend modules are already independent enough to plug into any web framework without changes.
+
+8. **Real photo preprocessing** — shadow removal, uneven lighting compensation, and background cleanup for photos taken in classrooms or on desks. The current CLAHE handles some of this but a dedicated shadow detection step would help a lot with real-world images.
