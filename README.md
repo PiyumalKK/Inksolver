@@ -94,6 +94,7 @@ jupyter notebook notebooks/
 | 2 | Segmentation | Done |
 | 3 | CNN training | Done |
 | 4 | Equation parsing & solving | Done |
+| 5 | System of equations + line splitting | Done |
 
 ---
 
@@ -186,6 +187,41 @@ After all the preprocessing, the equation string goes to **SymPy** which handles
 - Linear equations (`2*x+3=7`) → solves for `x=2`
 - Verification (`3+4=7`) → checks if both sides are equal
 
-Tested with simulated CNN outputs since we don't have real end-to-end data yet. The full pipeline integration comes in step 5.
+After all that, SymPy handles the actual math. We also added **line splitting** so the system can handle multiple equations in one image. Uses horizontal projection profile - sum the white pixels per row, find the gaps between lines, split and process each line separately. Then solve them together as a system of equations.
 
-Files: `notebooks/04_equation_parser.ipynb`, `src/solver.py`
+### Test Results
+
+Tested on synthetic samples with the full pipeline (image -> preprocess -> segment -> classify -> parse -> solve):
+
+| Sample | Equation | Parsed | Result | Status |
+|--------|----------|--------|--------|--------|
+| `synthetic_eq1.png` | `2x + 3 = 7` | `2*x+3=7` | x = 2 | Pass |
+| `system_eq1.png` | `3x - y = 7` / `2x + y = 8` | `3*x-y=7` / `2*x+y=8` | x=3, y=2 | Pass |
+| `sample_arithmetic.png` | `5 + 3` | `5+3` | 8 | Pass |
+| `sample_system2.png` | `x + 2y = 12` / `3x - y = 1` | `x+2*y=12` / `3*x-y=1` | x=2, y=5 | Pass |
+| `sample_mixed.png` | `9 - 4 + 2` | `9-4+2` | 7 | Pass |
+| `sample_linear.png` | `4x - 8 = 0` | `4*x-8=8` | x=4 | Fail (CNN: 0->8) |
+
+5/6 passed. The one failure is a CNN recognition issue (`0` misread as `8`), not the parser.
+
+Files: `notebooks/04_equation_parser.ipynb`, `src/solver.py`, `src/segment.py` (line splitting)
+
+## Future Improvements
+
+Things that could push this system further:
+
+1. **Better CNN model** — the current model struggles with certain handwriting styles. `0` vs `8`, `y` vs `8`, and the whole `x`/`X`/`times` thing. Training on a larger, more diverse handwriting dataset (like CROHME or custom collected data) would help a lot.
+
+2. **Multi-digit numbers** — right now each digit is a separate segment. `12` shows up as `1` and `2` as separate symbols. Need spacing-based logic to merge consecutive digits into multi-digit numbers.
+
+3. **Quadratic and higher-order equations** — currently handles linear equations only. Adding support for `x^2` would require detecting superscript positioning from bounding box y-coordinates.
+
+4. **Fractions** — handwritten fractions (horizontal bar with numerator on top, denominator below) need special segmentation logic. The horizontal bar overlaps with minus and equals.
+
+5. **Better `=` detection** — currently using aspect ratio heuristics which is fragile. Could train a separate small classifier just for operator symbols, or add `=` to the training data with custom samples.
+
+6. **Confidence-based rejection** — when the CNN confidence is below a threshold, flag it as uncertain instead of guessing. Show the user which symbols it's unsure about.
+
+7. **Web interface** — wrap the whole thing in a Flask/Streamlit app where you can upload or take a photo and get the solution back. Way more user-friendly than CLI.
+
+8. **Real handwriting data collection** — collect actual handwritten equation photos from students, label them, and use that as a test set. Synthetic images are too clean compared to real photos with shadows, angles, and messy handwriting.

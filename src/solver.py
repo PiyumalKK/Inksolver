@@ -45,9 +45,18 @@ def detect_equals(predictions, boxes):
                 continue
 
         # case 2: merged into one wide box - CNN sees it as '-' or 'div'
-        # '=' is wide and short, aspect ratio > 1.5
-        if label in ('-', 'div') and h > 0 and w / h > 1.5:
-            new_preds.append(('=', conf))
+        # '=' is wide but not super thin like '-'. aspect between 1.5 and 4
+        if label in ('-', 'div') and h > 0:
+            aspect = w / h
+            if 1.5 < aspect < 4.0:
+                new_preds.append(('=', conf))
+                new_boxes.append(boxes[i])
+                continue
+
+        # case 3: '+' often gets read as 'div' — but '+' has a squarish box (aspect ~1)
+        # real division sign is taller than wide
+        if label == 'div' and h > 0 and w / h < 1.3:
+            new_preds.append(('+', conf))
             new_boxes.append(boxes[i])
             continue
 
@@ -206,12 +215,72 @@ def solve_from_predictions(predictions, boxes):
     return result
 
 
+def solve_system(equations):
+    """
+    solve a system of equations (e.g. two equations, two unknowns).
+    equations is a list of equation strings like ['2*x+y=10', 'x-y=2']
+    """
+    x, y = sp.symbols('x y')
+
+    try:
+        exprs = []
+        for eq_str in equations:
+            if '=' not in eq_str:
+                return {
+                    'type': 'error',
+                    'expressions': equations,
+                    'error': f'no equals sign in: {eq_str}',
+                }
+            left, right = eq_str.split('=', 1)
+            exprs.append(sp.sympify(left) - sp.sympify(right))
+
+        # collect all variables
+        all_vars = set()
+        for expr in exprs:
+            all_vars.update(expr.free_symbols)
+
+        solutions = sp.solve(exprs, list(all_vars))
+
+        if isinstance(solutions, dict):
+            # single solution
+            result = {}
+            for var, val in solutions.items():
+                v = float(val)
+                if v == int(v):
+                    v = int(v)
+                result[str(var)] = v
+            return {
+                'type': 'system',
+                'expressions': equations,
+                'solutions': result,
+            }
+        elif isinstance(solutions, list) and solutions:
+            return {
+                'type': 'system',
+                'expressions': equations,
+                'solutions': {str(v): float(s) for v, s in zip(all_vars, solutions[0])},
+            }
+        else:
+            return {
+                'type': 'error',
+                'expressions': equations,
+                'error': 'no solution found',
+            }
+
+    except Exception as e:
+        return {
+            'type': 'error',
+            'expressions': equations,
+            'error': str(e),
+        }
+
+
 if __name__ == '__main__':
     import sys
     import os
     sys.path.insert(0, os.path.dirname(__file__))
     from preprocess import preprocess
-    from segment import segment
+    from segment import segment, split_lines
     from model import load_model, predict_batch
 
     if len(sys.argv) < 2:
@@ -220,22 +289,51 @@ if __name__ == '__main__':
 
     load_model()
     binary = preprocess(sys.argv[1])
-    chars, boxes = segment(binary)
-    predictions = predict_batch(chars)
+    lines = split_lines(binary)
 
-    print(f'raw predictions: {[p[0] for p in predictions]}')
+    if len(lines) == 1:
+        # single equation
+        chars, boxes = segment(lines[0])
+        predictions = predict_batch(chars)
+        print(f'raw predictions: {[p[0] for p in predictions]}')
 
-    result = solve_from_predictions(predictions, boxes)
-    print(f'equation: {result.get("expression", "?")}')
-    print(f'symbols: {result["symbols"]}')
+        result = solve_from_predictions(predictions, boxes)
+        print(f'equation: {result.get("expression", "?")}')
+        print(f'symbols: {result["symbols"]}')
 
-    if result['type'] == 'arithmetic':
-        print(f'result: {result["result"]}')
-    elif result['type'] == 'equation':
-        print(f'{result["variable"]} = {result["solutions"]}')
-    elif result['type'] == 'verification':
-        print(f'equation is {"TRUE" if result["result"] else "FALSE"}')
-    elif result['type'] == 'error':
-        print(f'error: {result["error"]}')
+        if result['type'] == 'arithmetic':
+            print(f'result: {result["result"]}')
+        elif result['type'] == 'equation':
+            print(f'{result["variable"]} = {result["solutions"]}')
+        elif result['type'] == 'verification':
+            print(f'equation is {"TRUE" if result["result"] else "FALSE"}')
+        elif result['type'] == 'error':
+            print(f'error: {result["error"]}')
+        else:
+            print(f'simplified: {result.get("simplified", "?")}')
+
     else:
-        print(f'simplified: {result.get("simplified", "?")}')
+        # multiple lines = system of equations
+        print(f'detected {len(lines)} equations')
+        eq_strings = []
+
+        for i, line_img in enumerate(lines):
+            chars, boxes = segment(line_img)
+            predictions = predict_batch(chars)
+            preds, bxs = detect_equals(predictions, boxes)
+            resolved = resolve_ambiguity(preds)
+            eq_str = build_equation(resolved)
+            eq_strings.append(eq_str)
+            print(f'  line {i+1}: {[p[0] for p in predictions]} -> {eq_str}')
+
+        result = solve_system(eq_strings)
+        print()
+        if result['type'] == 'system':
+            print('system of equations:')
+            for eq in eq_strings:
+                print(f'  {eq}')
+            print('solution:')
+            for var, val in result['solutions'].items():
+                print(f'  {var} = {val}')
+        elif result['type'] == 'error':
+            print(f'error: {result["error"]}')
