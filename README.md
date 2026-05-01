@@ -44,28 +44,28 @@ python src/solver.py path/to/your/equation.png
 ### Preprocess an image
 Converts a photo of a handwritten equation into a clean binary image.
 ```bash
-python src/preprocess.py data/raw_samples/eq1.png
+python src/preprocess.py data/raw_samples/synthetic_eq1.png
 # saves output_binary.png
 ```
 
 ### Segment characters
 Splits the equation into individual character images (sorted left to right).
 ```bash
-python src/segment.py data/raw_samples/eq1.png
+python src/segment.py data/raw_samples/synthetic_eq1.png
 # saves character crops to data/segments/
 ```
 
 ### Recognize symbols
 Runs preprocessing + segmentation + CNN prediction end to end.
 ```bash
-python src/model.py data/raw_samples/eq1.png
+python src/model.py data/raw_samples/synthetic_eq1.png
 # prints recognized symbols with confidence scores
 ```
 
 ### Solve equation
 Full pipeline: preprocess -> segment -> classify -> parse -> solve.
 ```bash
-python src/solver.py data/raw_samples/eq1.png
+python src/solver.py data/raw_samples/synthetic_eq1.png
 # prints the equation and solution
 ```
 
