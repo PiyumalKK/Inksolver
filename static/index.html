@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InkSolver — Handwritten Equation Solver</title>
+  <meta name="description" content="Upload a photo of a handwritten math equation and get the solution instantly. Powered by computer vision and deep learning.">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✏️</text></svg>">
+</head>
+<body>
+  <!-- animated background -->
+  <div class="bg-gradient"></div>
+  <div class="bg-grid"></div>
+
+  <!-- error toast -->
+  <div id="errorToast" class="error-toast">
+    <span id="errorToastMessage"></span>
+  </div>
+
+  <div class="app">
+    <!-- ═══ Header ═══ -->
+    <header class="header">
+      <div class="header__icon">✏️</div>
+      <h1 class="header__title">InkSolver</h1>
+      <p class="header__subtitle">
+        Upload a photo of a handwritten equation and watch AI read, parse, and solve it step by step.
+      </p>
+    </header>
+
+    <!-- ═══ Upload Zone ═══ -->
+    <div id="uploadZone" class="upload-zone">
+      <div class="upload-zone__content">
+        <span class="upload-zone__icon">📷</span>
+        <div class="upload-zone__title">Drop your equation image here</div>
+        <div class="upload-zone__desc">
+          or <span>click to browse</span> · PNG, JPG, BMP
+        </div>
+      </div>
+      <input type="file" id="fileInput" accept="image/png,image/jpeg,image/bmp">
+    </div>
+
+    <!-- ═══ Preview ═══ -->
+    <div id="previewSection" class="preview-section">
+      <div class="preview-card">
+        <div class="preview-card__header">
+          <span class="preview-card__label">Selected Image</span>
+          <button id="removeBtn" class="preview-card__remove">✕ Remove</button>
+        </div>
+        <img id="previewImage" class="preview-card__image" alt="Preview of uploaded equation">
+      </div>
+      <button id="solveBtn" class="solve-btn">
+        ⚡ Solve Equation
+      </button>
+    </div>
+
+    <!-- ═══ Processing Pipeline ═══ -->
+    <div id="processingSection" class="processing-section">
+      <div class="pipeline">
+        <div class="pipeline__title">Processing Pipeline</div>
+        <div class="pipeline__steps">
+          <div class="pipeline__step" data-step="preprocess">
+            <div class="pipeline__dot">1</div>
+            <span class="pipeline__label">Preprocessing — grayscale, blur, threshold, morphology</span>
+          </div>
+          <div class="pipeline__step" data-step="segment">
+            <div class="pipeline__dot">2</div>
+            <span class="pipeline__label">Segmentation — detecting individual characters</span>
+          </div>
+          <div class="pipeline__step" data-step="classify">
+            <div class="pipeline__dot">3</div>
+            <span class="pipeline__label">Recognition — CNN classifying each symbol</span>
+          </div>
+          <div class="pipeline__step" data-step="parse">
+            <div class="pipeline__dot">4</div>
+            <span class="pipeline__label">Parsing — building equation string</span>
+          </div>
+          <div class="pipeline__step" data-step="solve">
+            <div class="pipeline__dot">5</div>
+            <span class="pipeline__label">Solving — computing the solution</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Results ═══ -->
+    <div id="resultsSection" class="results-section">
+      <!-- solution card -->
+      <div id="solutionCard" class="solution-card">
+        <div id="solutionBadge" class="solution-card__badge solution-card__badge--success">
+          ✓ Solved
+        </div>
+        <div id="solutionEquation" class="solution-card__equation"></div>
+        <div id="solutionResult" class="solution-card__result"></div>
+        <div id="solutionError" class="solution-card__error" style="display:none;"></div>
+      </div>
+
+      <div class="detail-grid">
+        <!-- pipeline images -->
+        <div class="detail-panel">
+          <div class="detail-panel__header">
+            <span class="detail-panel__icon">🖼️</span>
+            <span class="detail-panel__title">Pipeline Images</span>
+          </div>
+          <div class="detail-panel__body">
+            <div class="image-tabs">
+              <button class="image-tab active" data-target="imgOriginal">Original</button>
+              <button class="image-tab" data-target="imgPreprocessed">Preprocessed</button>
+              <button class="image-tab" data-target="imgSegmented">Segmented</button>
+            </div>
+            <img id="imgOriginal" class="image-display" alt="Original image">
+            <img id="imgPreprocessed" class="image-display hidden" alt="Preprocessed binary image">
+            <img id="imgSegmented" class="image-display hidden" alt="Segmented with bounding boxes">
+          </div>
+        </div>
+
+        <!-- recognized symbols -->
+        <div class="detail-panel">
+          <div class="detail-panel__header">
+            <span class="detail-panel__icon">🔤</span>
+            <span class="detail-panel__title">Recognized Symbols</span>
+          </div>
+          <div class="detail-panel__body">
+            <div id="symbolList" class="symbol-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Sample Images ═══ -->
+    <div class="samples-section">
+      <div class="samples-section__title">Or try a sample</div>
+      <div id="samplesGrid" class="samples-grid">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+    <!-- ═══ Footer ═══ -->
+    <footer class="footer">
+      <p>InkSolver — Computer Vision Pipeline · OpenCV · TensorFlow · SymPy</p>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
