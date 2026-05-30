@@ -219,6 +219,4 @@ Things that could push this system further:
 
 6. **Parentheses and nested expressions** — the parser handles flat equations but doesn't properly deal with nested brackets like `2(x+1) = 6`. Need bracket matching logic that groups sub-expressions before building the equation string.
 
-7. **Web interface** — a Flask or Streamlit frontend where you upload a photo and get the answer. The backend modules are already independent enough to plug into any web framework without changes.
-
-8. **Real photo preprocessing** — shadow removal, uneven lighting compensation, and background cleanup for photos taken in classrooms or on desks. The current CLAHE handles some of this but a dedicated shadow detection step would help a lot with real-world images.
+7. **Real photo preprocessing** — shadow removal, uneven lighting compensation, and background cleanup for photos taken in classrooms or on desks. The current CLAHE handles some of this but a dedicated shadow detection step would help a lot with real-world images.
