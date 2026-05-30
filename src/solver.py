@@ -122,12 +122,18 @@ def build_equation(predictions):
     return ''.join(parts)
 
 
+def _fix_leading_zeros(s):
+    """Remove leading zeros from integer literals (e.g. '02' -> '2') so SymPy can parse them."""
+    return re.sub(r'\b0+(\d)', r'\1', s)
+
+
 def solve_equation(eq_str):
     """
     solve using sympy.
     if there's '=' -> solve the equation.
     if no '=' -> just evaluate the arithmetic.
     """
+    eq_str = _fix_leading_zeros(eq_str)
     x, y = sp.symbols('x y')
 
     try:
@@ -216,6 +222,7 @@ def solve_system(equations):
     try:
         exprs = []
         for eq_str in equations:
+            eq_str = _fix_leading_zeros(eq_str)
             if '=' not in eq_str:
                 return {
                     'type': 'error',
