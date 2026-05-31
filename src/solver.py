@@ -86,6 +86,12 @@ def resolve_ambiguity(predictions):
                 resolved.append(('x', confs[i]))
         elif label == 'div':
             resolved.append(('/', confs[i]))
+        elif label == 'o':
+            # Letter 'o' is almost always a digit '0' in math equations
+            resolved.append(('0', confs[i]))
+        elif label in ('ascii_124', 'l'):
+            # Pipe symbol '|' or lowercase 'l' is almost always digit '1'
+            resolved.append(('1', confs[i]))
         else:
             resolved.append((label, confs[i]))
 

@@ -398,7 +398,13 @@ def _process_image(image_path):
 
         # draw segmented overview on full binary image
         all_chars_img, all_boxes = segment(binary_orig)
-        seg_vis = _draw_boxes(binary_orig, all_boxes) if all_boxes else cv2.cvtColor(binary_orig, cv2.COLOR_GRAY2BGR)
+        if all_boxes and all_chars_img:
+            all_preds = predict_batch(all_chars_img)
+            all_resolved = resolve_ambiguity(all_preds)
+            all_labels = [p[0] for p in all_resolved]
+            seg_vis = _draw_boxes(binary_orig, all_boxes, all_labels)
+        else:
+            seg_vis = cv2.cvtColor(binary_orig, cv2.COLOR_GRAY2BGR)
 
         response = {
             'success': True,

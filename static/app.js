@@ -20,6 +20,8 @@
   const solutionEquation = document.getElementById('solutionEquation');
   const solutionResult   = document.getElementById('solutionResult');
   const solutionError    = document.getElementById('solutionError');
+  const solutionWarning  = document.getElementById('solutionWarning');
+  const solutionWarningText = document.getElementById('solutionWarningText');
   const symbolList       = document.getElementById('symbolList');
   const samplesGrid      = document.getElementById('samplesGrid');
   const errorToast       = document.getElementById('errorToast');
@@ -215,6 +217,12 @@
   function renderResults(data) {
     resultsSection.classList.add('visible');
 
+    // Hide warning by default
+    if (solutionWarning) {
+      solutionWarning.style.display = 'none';
+      solutionWarningText.textContent = '';
+    }
+
     // solution card
     if (data.type === 'error' || data.result?.error) {
       solutionBadge.className = 'solution-card__badge solution-card__badge--error';
@@ -257,6 +265,24 @@
           solutionResult.textContent = data.result.simplified;
         }
       }
+
+      // Check for low-confidence warnings
+      const avgConf = data.steps?.avg_confidence;
+      const recognition = data.mode === 'system'
+        ? data.steps?.recognition?.flatMap(r => r.symbols) || []
+        : data.steps?.recognition || [];
+      const hasLowConfSymbol = recognition.some(sym => sym.confidence < 60);
+
+      if (avgConf !== undefined && (avgConf < 75 || hasLowConfSymbol)) {
+        if (solutionWarning && solutionWarningText) {
+          solutionWarning.style.display = 'inline-flex';
+          if (avgConf < 75) {
+            solutionWarningText.textContent = `Double check: The overall recognition confidence is low (${avgConf}%). Some symbols might be misread.`;
+          } else {
+            solutionWarningText.textContent = `Double check: Some handwritten symbols were hard for the AI to read. Verify the recognized symbols below.`;
+          }
+        }
+      }
     }
 
     // images
@@ -287,7 +313,7 @@
       const barClass = conf >= 90 ? 'high' : conf >= 70 ? 'medium' : 'low';
 
       chip.innerHTML = `
-        <span class="symbol-chip__char">${escapeHtml(sym.symbol)}</span>
+        <span class="symbol-chip__char">${escapeHtml(getDisplaySymbol(sym.symbol))}</span>
         <div class="symbol-chip__bar-wrapper">
           <div class="symbol-chip__bar ${barClass}" style="width: 0%"></div>
         </div>
@@ -339,6 +365,41 @@
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  const SYMBOL_MAP = {
+    'times': '×',
+    'div': '÷',
+    'ascii_124': '|',
+    'forward_slash': '/',
+    'Delta': 'Δ',
+    'alpha': 'α',
+    'beta': 'β',
+    'gamma': 'γ',
+    'theta': 'θ',
+    'lambda': 'λ',
+    'mu': 'μ',
+    'sigma': 'σ',
+    'phi': 'φ',
+    'pi': 'π',
+    'geq': '≥',
+    'leq': '≤',
+    'neq': '≠',
+    'gt': '>',
+    'lt': '<',
+    'infty': '∞',
+    'int': '∫',
+    'sum': '∑',
+    'sqrt': '√',
+    'exists': '∃',
+    'forall': '∀',
+    'rightarrow': '→',
+    'prime': '′',
+    'ldots': '…'
+  };
+
+  function getDisplaySymbol(symName) {
+    return SYMBOL_MAP[symName] || symName;
   }
 
   // ── Load Samples ──────────────────────────────────────────────────
