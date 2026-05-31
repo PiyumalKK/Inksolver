@@ -756,8 +756,11 @@ body {
   font-size: 1.4rem;
   font-weight: 800;
   color: var(--neon-pink);
-  width: 40px;
+  min-width: 40px;
+  width: auto;
+  flex-shrink: 0;
   text-align: center;
+  margin-right: 5px;
 }
 
 .symbol-chip__bar-wrapper {
@@ -919,6 +922,42 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   color: var(--text-muted);
   font-size: 0.9rem;
+}
+
+/* Low-Confidence Warning Banner */
+.solution-card__warning {
+  font-size: 1rem;
+  color: var(--neon-amber);
+  position: relative;
+  z-index: 1;
+  background: rgba(251, 191, 36, 0.08);
+  padding: 16px 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  margin-top: 25px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 600px;
+  text-align: left;
+  box-shadow: 0 4px 20px rgba(251, 191, 36, 0.1);
+  animation: fade-up 0.5s forwards;
+}
+
+.solution-card__warning-icon {
+  font-size: 1.4rem;
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
 }
 
 /* Responsive */
