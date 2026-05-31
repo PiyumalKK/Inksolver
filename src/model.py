@@ -8,7 +8,7 @@ _model = None
 _label_map = None
 
 
-def load_model(model_path='models/symbol_classifier.h5', label_path='models/label_map.json'):
+def load_model(model_path='models/symbol_classifier_crohme.h5', label_path='models/label_map_crohme.json'):
     """load the trained CNN and label mapping"""
     global _model, _label_map
 

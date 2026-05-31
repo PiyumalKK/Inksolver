@@ -29,8 +29,8 @@ def _ensure_model():
     """lazy-load the CNN model on first request"""
     global _model_loaded
     if not _model_loaded:
-        model_path = os.path.join(os.path.dirname(__file__), 'models', 'symbol_classifier.h5')
-        label_path = os.path.join(os.path.dirname(__file__), 'models', 'label_map.json')
+        model_path = os.path.join(os.path.dirname(__file__), 'models', 'symbol_classifier_crohme.h5')
+        label_path = os.path.join(os.path.dirname(__file__), 'models', 'label_map_crohme.json')
         load_model(model_path, label_path)
         _model_loaded = True
 
