@@ -12,8 +12,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from preprocess import preprocess
 from segment import segment, split_lines
-from model import load_model, predict_batch
-from solver import detect_equals, resolve_ambiguity, build_equation, solve_equation, solve_system
+from model import load_model, predict_batch, predict_batch_top_k
+from solver import detect_equals, resolve_ambiguity, build_equation, solve_equation, solve_system, resolve_ambiguity_top_k
+
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
@@ -187,29 +188,51 @@ def _avg_confidence(predictions):
 
 
 def _try_pipeline(binary_img):
-    """run segment → classify → parse on a binary image.
+    """run segment → classify → parse on a binary image with context-aware re-prediction.
     returns (eq_str, predictions, boxes, resolved, avg_conf) or None on failure."""
     from segment import segment
-    from model import predict_batch
 
     chars, boxes = segment(binary_img)
     if not chars:
         return None
 
-    predictions = predict_batch(chars)
-    preds_eq, boxes_eq = detect_equals(predictions, boxes)
-    resolved = resolve_ambiguity(preds_eq)
-    eq_str = build_equation(resolved)
-    avg_conf = _avg_confidence(predictions)
+    try:
+        # 1. Predict top-3 candidates for each character
+        preds_top_k = predict_batch_top_k(chars, k=3)
+        
+        # 2. Resolve ambiguity and select the most mathematically valid equation candidate
+        resolved, eq_str, avg_conf = resolve_ambiguity_top_k(preds_top_k, boxes)
+        
+        # 3. Format predictions for backwards-compatibility with UI (expects top-1 list)
+        predictions = [(p[0][0], p[0][1]) for p in preds_top_k]
+        
+        return {
+            'eq_str': eq_str,
+            'predictions': predictions,
+            'boxes': boxes,
+            'resolved': resolved,
+            'avg_conf': avg_conf,
+            'chars': chars,
+        }
+    except Exception as e:
+        print(f"Error in top-k pipeline: {e}. Falling back to standard pipeline.")
+        # Fallback to standard single-prediction pipeline
+        from model import predict_batch
+        predictions = predict_batch(chars)
+        preds_eq, boxes_eq = detect_equals(predictions, boxes)
+        resolved = resolve_ambiguity(preds_eq)
+        eq_str = build_equation(resolved)
+        avg_conf = _avg_confidence(predictions)
+        
+        return {
+            'eq_str': eq_str,
+            'predictions': predictions,
+            'boxes': boxes,
+            'resolved': resolved,
+            'avg_conf': avg_conf,
+            'chars': chars,
+        }
 
-    return {
-        'eq_str': eq_str,
-        'predictions': predictions,
-        'boxes': boxes,
-        'resolved': resolved,
-        'avg_conf': avg_conf,
-        'chars': chars,
-    }
 
 
 def _process_image(image_path):
@@ -382,13 +405,19 @@ def _process_image(image_path):
             chars, boxes = segment(line_img)
             if not chars:
                 continue
-            predictions = predict_batch(chars)
+            try:
+                preds_top_k = predict_batch_top_k(chars, k=3)
+                resolved, eq_str, avg_conf = resolve_ambiguity_top_k(preds_top_k, boxes)
+                predictions = [(p[0][0], p[0][1]) for p in preds_top_k]
+            except Exception as e:
+                print(f"Error in multi-eq line top-k pipeline: {e}")
+                predictions = predict_batch(chars)
+                preds_eq, boxes_eq = detect_equals(predictions, boxes)
+                resolved = resolve_ambiguity(preds_eq)
+                eq_str = build_equation(resolved)
+
             raw_symbols = [{'symbol': p[0], 'confidence': round(p[1] * 100, 1)} for p in predictions]
             all_recognition.append({'line': i + 1, 'symbols': raw_symbols})
-
-            preds_eq, boxes_eq = detect_equals(predictions, boxes)
-            resolved = resolve_ambiguity(preds_eq)
-            eq_str = build_equation(resolved)
             eq_strings.append(eq_str)
 
         if not eq_strings:
@@ -399,9 +428,14 @@ def _process_image(image_path):
         # draw segmented overview on full binary image
         all_chars_img, all_boxes = segment(binary_orig)
         if all_boxes and all_chars_img:
-            all_preds = predict_batch(all_chars_img)
-            all_resolved = resolve_ambiguity(all_preds)
-            all_labels = [p[0] for p in all_resolved]
+            try:
+                all_preds_top_k = predict_batch_top_k(all_chars_img, k=3)
+                all_resolved, _, _ = resolve_ambiguity_top_k(all_preds_top_k, all_boxes)
+                all_labels = [p[0] for p in all_resolved]
+            except Exception as e:
+                all_preds = predict_batch(all_chars_img)
+                all_resolved = resolve_ambiguity(all_preds)
+                all_labels = [p[0] for p in all_resolved]
             seg_vis = _draw_boxes(binary_orig, all_boxes, all_labels)
         else:
             seg_vis = cv2.cvtColor(binary_orig, cv2.COLOR_GRAY2BGR)

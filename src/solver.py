@@ -98,6 +98,150 @@ def resolve_ambiguity(predictions):
     return resolved
 
 
+def _dry_run_parse(eq_str):
+    """Dry-run parse the equation string using SymPy to check syntax validity."""
+    import sympy as sp
+    eq_str_fixed = _fix_leading_zeros(eq_str)
+    
+    # Check simple syntax errors before SymPy
+    if not eq_str_fixed or not eq_str_fixed.strip():
+        return False, None
+    if re.search(r'[=+\-*/]{3,}', eq_str_fixed):
+        return False, None
+    if re.match(r'^[=+*/]', eq_str_fixed):
+        return False, None
+    if re.search(r'[=+\-*/]$', eq_str_fixed):
+        return False, None
+
+    try:
+        if '=' in eq_str_fixed:
+            left, right = eq_str_fixed.split('=', 1)
+            if not left.strip() or not right.strip():
+                return False, None
+            lhs = sp.sympify(left)
+            rhs = sp.sympify(right)
+            expr = lhs - rhs
+        else:
+            expr = sp.sympify(eq_str_fixed)
+        return True, expr
+    except Exception:
+        return False, None
+
+
+def resolve_ambiguity_top_k(preds_top_k, boxes, confidence_threshold=0.85):
+    """
+    Finds the mathematically most plausible equation using top-k predictions
+    and equation context.
+    """
+    import itertools
+    import sympy as sp
+
+    # 1. Determine which positions are ambiguous and should be branched
+    branch_positions = []
+    # Known highly ambiguous characters
+    ambiguous_set = {'o', '0', 'l', '1', 'ascii_124', 's', '5', 'z', '2', 'g', 'q', '9', 't', '+', 'x', 'X', 'times', 'b', '6', 'B', '8'}
+
+    for i, options in enumerate(preds_top_k):
+        if not options:
+            continue
+        top_label, top_conf = options[0]
+        # Branch if confidence is low, or if the top class is known to be ambiguous
+        # and there is a reasonable second choice (confidence > 0.1)
+        should_branch = (top_conf < confidence_threshold) or (top_label in ambiguous_set and len(options) > 1 and options[1][1] > 0.1)
+        if should_branch:
+            branch_positions.append(i)
+
+    # To avoid combinatorial explosion, limit the branching to the 4 most uncertain positions
+    if len(branch_positions) > 4:
+        # Sort by top-1 confidence (lowest first)
+        branch_positions = sorted(branch_positions, key=lambda idx: preds_top_k[idx][0][1])[:4]
+
+    # 2. Build the candidate pool for each position
+    candidate_pools = []
+    for i, options in enumerate(preds_top_k):
+        if i in branch_positions:
+            # Consider all top-k options for this position
+            candidate_pools.append(options)
+        else:
+            # Only consider the top option
+            candidate_pools.append([options[0]])
+
+    # 3. Generate all combinations of predictions
+    best_candidate_resolved = None
+    best_eq_str = None
+    best_score = -999.0
+    best_avg_conf = 0.0
+
+    # Let's generate candidates and evaluate them
+    for candidate in itertools.product(*candidate_pools):
+        # A candidate is a list/tuple of (label, conf) for each character
+        # A. Detect equals and resolve standard ambiguity
+        preds_eq, boxes_eq = detect_equals(list(candidate), boxes)
+        resolved = resolve_ambiguity(preds_eq)
+        eq_str = build_equation(resolved)
+
+        # B. Check if it's syntactically valid in SymPy
+        is_valid, parsed_expr = _dry_run_parse(eq_str)
+        
+        # C. Compute score
+        avg_conf = sum(p[1] for p in candidate) / len(candidate)
+        
+        # Base score is the average confidence
+        score = avg_conf
+
+        if not is_valid:
+            # If not valid, we heavily penalize it but don't completely discard it
+            # (in case NO candidate is syntactically valid, we still want to pick the best-guess prediction)
+            score -= 10.0
+        else:
+            # Context-aware bonuses/penalties for valid equations
+            free_symbols = {str(sym) for sym in parsed_expr.free_symbols} if parsed_expr else set()
+            
+            # 1. Variable 'o' or 'l' penalty (extremely likely to be '0' or '1')
+            if 'o' in free_symbols:
+                score -= 0.5
+            if 'l' in free_symbols:
+                score -= 0.5
+
+            # 2. Consistent variables bonus
+            # If the equation uses common variables like x or y, it's preferred
+            for common_var in ['x', 'y']:
+                if common_var in free_symbols:
+                    score += 0.1
+
+            # 3. Number vs variable implicit multiplication check
+            # e.g., if we chose 'o' as a variable, we have terms like '2*o'
+            # If we chose '0', it becomes a single number '20'.
+            if '*o' in eq_str or 'o*' in eq_str:
+                score -= 0.3
+            if '*l' in eq_str or 'l*' in eq_str:
+                score -= 0.3
+
+            # 4. If it contains '0' (digit zero), give a small bonus because digits are much more common than letter 'o' in equations
+            # especially if it forms a multi-digit number
+            digit_sequences = re.findall(r'\d+', eq_str)
+            for seq in digit_sequences:
+                if len(seq) > 1:
+                    score += 0.05 * len(seq)
+
+        # Track the best candidate
+        if score > best_score:
+            best_score = score
+            best_candidate_resolved = resolved
+            best_eq_str = eq_str
+            best_avg_conf = avg_conf
+
+    # Fallback to top-1 if somehow no candidate was selected (should not happen)
+    if best_candidate_resolved is None:
+        default_candidate = [options[0] for options in preds_top_k]
+        preds_eq, boxes_eq = detect_equals(default_candidate, boxes)
+        best_candidate_resolved = resolve_ambiguity(preds_eq)
+        best_eq_str = build_equation(best_candidate_resolved)
+        best_avg_conf = sum(p[1] for p in default_candidate) / len(default_candidate)
+
+    return best_candidate_resolved, best_eq_str, best_avg_conf
+
+
 def build_equation(predictions):
     """
     take resolved predictions and build equation string.
