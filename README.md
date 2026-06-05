@@ -215,8 +215,6 @@ Things that could push this system further:
 
 4. **Perspective and rotation correction** — real phone photos are often tilted or taken at an angle. Adding automatic rotation correction (using Hough line detection to find the baseline) and perspective transform would make preprocessing way more robust for real-world use.
 
-5. **Confidence threshold and re-prediction** — when the CNN confidence drops below a threshold, instead of just guessing, try alternative interpretations. For example if a symbol is predicted as `0` with 55% confidence and `o` with 40%, use the equation context to pick the right one.
+5. **Parentheses and nested expressions** — the parser handles flat equations but doesn't properly deal with nested brackets like `2(x+1) = 6`. Need bracket matching logic that groups sub-expressions before building the equation string.
 
-6. **Parentheses and nested expressions** — the parser handles flat equations but doesn't properly deal with nested brackets like `2(x+1) = 6`. Need bracket matching logic that groups sub-expressions before building the equation string.
-
-7. **Real photo preprocessing** — shadow removal, uneven lighting compensation, and background cleanup for photos taken in classrooms or on desks. The current CLAHE handles some of this but a dedicated shadow detection step would help a lot with real-world images.
+6. **Real photo preprocessing** — shadow removal, uneven lighting compensation, and background cleanup for photos taken in classrooms or on desks. The current CLAHE handles some of this but a dedicated shadow detection step would help a lot with real-world images.

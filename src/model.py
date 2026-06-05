@@ -60,6 +60,27 @@ def predict_batch(char_images):
     return results
 
 
+def predict_batch_top_k(char_images, k=3):
+    """predict top-k symbols for a list of character images, returning list of lists of (label, confidence)"""
+    if _model is None:
+        raise RuntimeError('call load_model() first')
+
+    if not char_images:
+        return []
+
+    batch = np.array([img.astype(np.float32) / 255.0 for img in char_images])
+    batch = batch.reshape(-1, 45, 45, 1)
+
+    preds = _model.predict(batch, verbose=0)
+    results = []
+    for pred in preds:
+        top_k_indices = np.argsort(pred)[-k:][::-1]
+        results.append([(_label_map[idx], float(pred[idx])) for idx in top_k_indices])
+
+    return results
+
+
+
 if __name__ == '__main__':
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
