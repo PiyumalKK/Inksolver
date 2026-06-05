@@ -19,7 +19,32 @@ Photo → Grayscale → Threshold → Morphology Cleanup → Segment Characters 
 ```bash
 git clone https://github.com/PiyumalKK/Inksolver.git
 cd Inksolver
-pip install opencv-python numpy matplotlib tensorflow sympy
+```
+
+### Create & Activate Virtual Environment
+
+**Windows (PowerShell):**
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+```
+
+**Windows (CMD):**
+```cmd
+python -m venv venv
+venv\Scripts\activate.bat
+```
+
+**Linux / macOS:**
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### Install Dependencies
+
+```bash
+pip install -r requirements.txt
 ```
 
 ## Quick Test
