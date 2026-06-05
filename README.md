@@ -1,18 +1,34 @@
-# InkSolver - Handwritten Mathematical Equation Solver
+# InkSolver — Handwritten Mathematical Equation Solver
 
-A computer vision pipeline that reads handwritten math equations from images, recognizes symbols, and solves them.
+An end-to-end computer vision system that captures handwritten math equations from images, segments and classifies each symbol using a CNN, and automatically solves the equation using symbolic algebra.
 
-## Pipeline
+> **Course:** EE7204/EC7205 Computer Vision & Image Processing — University of Ruhuna  
+> **Model accuracy:** 95.66% on 84 symbol classes (CROHME dataset)
+
+## Pipeline Overview
 
 ```
-Photo → Grayscale → Threshold → Morphology Cleanup → Segment Characters → CNN Classify → Parse Equation → Solve
+┌─────────┐    ┌───────────┐    ┌──────────┐    ┌──────────────┐    ┌─────────┐    ┌───────┐    ┌───────┐
+│  Photo  │───▶│ Grayscale │───▶│  Blur +  │───▶│  Adaptive    │───▶│ Morpho- │───▶│Contour│───▶│  CNN  │
+│ (input) │    │ + CLAHE   │    │ Denoise  │    │  Threshold   │    │  logy   │    │Segment│    │Predict│
+└─────────┘    └───────────┘    └──────────┘    └──────────────┘    └─────────┘    └───────┘    └───────┘
+                                                                                                     │
+                                        ┌──────────┐    ┌───────────┐    ┌──────────────┐           │
+                                        │  SOLVE   │◀───│   Build   │◀───│  Ambiguity   │◀──────────┘
+                                        │ (SymPy)  │    │  Equation │    │  Resolution  │
+                                        └──────────┘    └───────────┘    └──────────────┘
 ```
 
 ## Tech Stack
-- **OpenCV** — Image preprocessing, thresholding, morphology, contours
-- **TensorFlow/Keras** — CNN symbol recognition (trained on Colab T4)
-- **SymPy** — Equation solving
-- **Python 3.10+**
+
+| Component | Library | Purpose |
+|-----------|---------|---------|
+| Image Processing | OpenCV 4.x | Grayscale, blur, CLAHE, adaptive threshold, morphology, contours |
+| Deep Learning | TensorFlow/Keras | CNN inference for symbol classification (84 classes) |
+| Symbolic Math | SymPy | Equation parsing and algebraic solving |
+| Web Interface | Flask | Upload image → get solution (browser-based) |
+| Training | Google Colab (T4 GPU) | Model training on CROHME dataset |
+| Language | Python 3.10+ | All modules |
 
 ## Setup
 
@@ -101,33 +117,48 @@ jupyter notebook notebooks/
 ```
 
 ## Project Structure
+
 ```
-├── notebooks/          # Step-by-step Jupyter notebooks
-├── src/                # Source code modules
-├── models/             # Trained models
-├── data/               # Images and datasets
-├── results/            # Output samples
-└── report/             # LaTeX proposal & figures
+InkSolver/
+├── app.py                  # Flask web application
+├── requirements.txt        # Python dependencies
+├── src/
+│   ├── preprocess.py       # Image → clean binary (grayscale, blur, CLAHE, threshold, morphology)
+│   ├── segment.py          # Binary → individual character crops (contours, merge, sort, resize)
+│   ├── model.py            # CNN inference wrapper (load model, predict symbols)
+│   └── solver.py           # Symbol sequence → equation → solution (SymPy)
+├── models/
+│   ├── symbol_classifier_crohme.h5   # Trained CNN weights (84 classes)
+│   └── label_map_crohme.json         # Class index → symbol name mapping
+├── notebooks/
+│   ├── 01_preprocessing.ipynb        # Preprocessing experiments & visualization
+│   ├── 02_segmentation.ipynb         # Segmentation development & testing
+│   ├── 03_cnn_training_v1.ipynb      # First attempt (HASYv2, 15 classes)
+│   ├── 03_cnn_training_v2.ipynb      # Final model (CROHME, 84 classes)
+│   └── 04_equation_parser.ipynb      # Parsing & solving logic
+├── static/                 # Web UI (HTML/CSS/JS)
+├── data/
+│   ├── dataset/            # Training data info (see README inside)
+│   ├── raw_samples/        # Test images
+│   └── segments/           # Extracted character crops
+├── uploads/                # Flask upload directory
+└── results/                # Output samples
 ```
 
-## Progress Log
+## Web Application
 
-| Step | Description | Status |
-|------|------------|--------|
-| 0 | Project setup | Done |
-| 1 | Preprocessing | Done |
-| 2 | Segmentation | Done |
-| 3 | CNN training | Done |
-| 4 | Equation parsing & solving | Done |
-| 5 | System of equations + line splitting | Done |
+InkSolver includes a Flask-based web interface for easy use:
 
----
+```bash
+python app.py
+```
+Open http://localhost:5000 in your browser → upload a photo → get the solution.
 
-## Phase 0 — Project Setup
+The web app uses a **dual-pipeline approach**: it tries two preprocessing variants (full CLAHE pipeline + simple threshold) and picks the result with higher confidence and mathematical validity.
 
-Created the repo, folder structure, and gitignore.
+## How It Works (Technical Details)
 
-## Phase 1 — Image Preprocessing
+### Stage 1 — Image Preprocessing (`src/preprocess.py`)
 
 The first step is turning a raw phone photo of a handwritten equation into a clean binary image that we can actually work with.
 
@@ -143,7 +174,7 @@ Output: clean binary image ready for character segmentation.
 
 Files: `notebooks/01_preprocessing.ipynb`, `src/preprocess.py`
 
-## Phase 2 — Character Segmentation
+### Stage 2 — Character Segmentation (`src/segment.py`)
 
 Now that we have a clean binary image, we need to chop it up into individual characters.
 
@@ -154,11 +185,9 @@ The approach:
 4. **Sort left to right** — sort by x coordinate so characters are in reading order
 5. **Crop and resize** — cut each character out, pad it to a square (so it doesn't get stretched), then resize to 45x45. The padding preserves aspect ratio which matters for the CNN later
 
-The `=` merging logic took some trial and error. First tried just checking if boxes are "close" vertically, but that merged things that shouldn't be merged. The horizontal overlap check works much better — if two contours are roughly in the same x range, they're probably parts of the same symbol.
-
 Files: `notebooks/02_segmentation.ipynb`, `src/segment.py`
 
-## Phase 3 — CNN Symbol Classifier
+### Stage 3 — CNN Symbol Classifier (`src/model.py`)
 
 This is the "brain" — a CNN that looks at a 45x45 character crop and tells us what symbol it is.
 
@@ -187,7 +216,7 @@ The `src/model.py` module wraps the trained model for inference — load once, t
 
 Files: `notebooks/03_cnn_training_v2.ipynb` (Colab), `src/model.py`, `models/symbol_classifier_crohme.h5`, `models/label_map_crohme.json`
 
-## Phase 4 — Equation Parsing & Solving
+### Stage 4 — Equation Parsing & Solving (`src/solver.py`)
 
 This is where the recognized symbols actually become a solvable equation.
 
@@ -209,7 +238,7 @@ After all the preprocessing, the equation string goes to **SymPy** which handles
 - Linear equations (`2*x+3=7`) → solves for `x=2`
 - Verification (`3+4=7`) → checks if both sides are equal
 
-After all that, SymPy handles the actual math. We also added **line splitting** so the system can handle multiple equations in one image. Uses horizontal projection profile - sum the white pixels per row, find the gaps between lines, split and process each line separately. Then solve them together as a system of equations.
+The system also supports **line splitting** to handle multiple equations in one image. Uses horizontal projection profile — sum the white pixels per row, find the gaps between lines, split and process each line separately. Then solve them together as a system of equations.
 
 ### Test Results
 
@@ -228,18 +257,7 @@ Tested on synthetic and handwritten samples with the full pipeline (image -> pre
 
 Files: `notebooks/04_equation_parser.ipynb`, `src/solver.py`, `src/segment.py` (line splitting)
 
-## Future Improvements
+## Datasets
 
-Things that could push this system further:
-
-1. **Exponent and subscript handling** — the system reads left to right only. To support `x^2` or `a_1`, need to compare bounding box y-positions — if a symbol is above the baseline and smaller, treat it as a power. That opens up quadratics, polynomials, and indexed variables.
-
-2. **Fraction support** — fractions need the segmentation to detect wide horizontal bars and group symbols above/below into numerator and denominator. Hard part is the fraction bar looks identical to minus and equals.
-
-3. **Multi-digit number merging** — right now `12` gets segmented as two separate digits `1` and `2`. Could use spacing between bounding boxes — if two consecutive digit boxes are close enough compared to the average gap, merge them into one number.
-
-4. **Perspective and rotation correction** — real phone photos are often tilted or taken at an angle. Adding automatic rotation correction (using Hough line detection to find the baseline) and perspective transform would make preprocessing way more robust for real-world use.
-
-5. **Parentheses and nested expressions** — the parser handles flat equations but doesn't properly deal with nested brackets like `2(x+1) = 6`. Need bracket matching logic that groups sub-expressions before building the equation string.
-
-6. **Real photo preprocessing** — shadow removal, uneven lighting compensation, and background cleanup for photos taken in classrooms or on desks. The current CLAHE handles some of this but a dedicated shadow detection step would help a lot with real-world images.
+- **xainano/handwrittenmathsymbols** — 100k+ CROHME symbols: https://www.kaggle.com/datasets/xainano/handwrittenmathsymbols
+- **sagyamthapa/handwritten-math-symbols** — 10k supplementary symbols: https://www.kaggle.com/datasets/sagyamthapa/handwritten-math-symbols
