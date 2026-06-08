@@ -1,11 +1,6 @@
 # Project plan (private)
 PROJECT_PLAN.md
 
-# Data files (too large for git)
-data/dataset/
-data/processed/
-data/segments/
-
 # Python
 __pycache__/
 *.pyc
@@ -21,3 +16,4 @@ uploads/
 # OS
 Thumbs.db
 .DS_Store
+lec
