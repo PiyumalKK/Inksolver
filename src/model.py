@@ -15,6 +15,15 @@ def load_model(model_path='models/symbol_classifier_crohme.h5', label_path='mode
     # lazy import so tensorflow doesn't load until needed
     from tensorflow import keras
 
+# Workaround for Keras 2/3 compatibility issues (quantization_config on Dense)
+    if not hasattr(keras.layers.Dense, '_patched_for_quantization'):
+        original_dense_init = keras.layers.Dense.__init__
+        def safe_dense_init(self, *args, **kwargs):
+            kwargs.pop('quantization_config', None)
+            original_dense_init(self, *args, **kwargs)
+        keras.layers.Dense.__init__ = safe_dense_init
+        keras.layers.Dense._patched_for_quantization = True
+
     _model = keras.models.load_model(model_path)
 
     with open(label_path, 'r') as f:
