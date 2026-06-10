@@ -125,6 +125,9 @@ def split_lines(binary_img, min_gap_ratio=0.05):
         result.append(binary_img[y1:y2, :])
 
     return result
+
+
+if __name__ == '__main__':
     import sys
     import os
     from preprocess import preprocess

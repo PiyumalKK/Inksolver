@@ -62,9 +62,10 @@ def detect_equals(predictions, boxes):
 
 def resolve_ambiguity(predictions):
     """
-    handle x/X/times confusion.
+    handle x/X/times confusion and Y/y variable normalization.
     if x, X, or times appears between two operands -> treat as multiplication.
-    otherwise -> treat as variable x.
+    if Y appears between two operands -> treat as multiplication.
+    otherwise -> treat as variable x or y respectively.
     """
     labels = [p[0] for p in predictions]
     confs = [p[1] for p in predictions]
@@ -75,8 +76,8 @@ def resolve_ambiguity(predictions):
             prev = labels[i - 1] if i > 0 else None
             nxt = labels[i + 1] if i < len(labels) - 1 else None
 
-            prev_is_operand = prev is not None and (prev.isdigit() or prev in ('x', 'y', ')'))
-            next_is_operand = nxt is not None and (nxt.isdigit() or nxt in ('x', 'y', '('))
+            prev_is_operand = prev is not None and (prev.isdigit() or prev in ('x', 'y', 'z', ')'))
+            next_is_operand = nxt is not None and (nxt.isdigit() or nxt in ('x', 'y', 'z', '('))
 
             if prev_is_operand and next_is_operand:
                 # between two operands = multiplication
@@ -84,6 +85,22 @@ def resolve_ambiguity(predictions):
             else:
                 # treat as variable x
                 resolved.append(('x', confs[i]))
+        elif label == 'Y':
+            # uppercase Y from CNN — treat as variable y or multiplication
+            prev = labels[i - 1] if i > 0 else None
+            nxt = labels[i + 1] if i < len(labels) - 1 else None
+
+            prev_is_operand = prev is not None and (prev.isdigit() or prev in ('x', 'y', 'z', ')'))
+            next_is_operand = nxt is not None and (nxt.isdigit() or nxt in ('x', 'y', 'z', '('))
+
+            if prev_is_operand and next_is_operand:
+                resolved.append(('*', confs[i]))
+            else:
+                # normalise to lowercase y so SymPy & build_equation can handle it
+                resolved.append(('y', confs[i]))
+        elif label == 'Z':
+            # uppercase Z — normalise to lowercase z
+            resolved.append(('z', confs[i]))
         elif label == 'div':
             resolved.append(('/', confs[i]))
         elif label == 'o':
@@ -245,10 +262,11 @@ def resolve_ambiguity_top_k(preds_top_k, boxes, confidence_threshold=0.85):
 def build_equation(predictions):
     """
     take resolved predictions and build equation string.
-    adds implicit multiplication where needed (e.g. 2x -> 2*x).
+    adds implicit multiplication where needed (e.g. 2x -> 2*x, 3y -> 3*y).
     """
     labels = [p[0] for p in predictions]
     parts = []
+    _vars = ('x', 'y', 'z')  # supported variables
 
     for i, sym in enumerate(labels):
         parts.append(sym)
@@ -256,17 +274,17 @@ def build_equation(predictions):
         # implicit multiplication
         if i < len(labels) - 1:
             nxt = labels[i + 1]
-            # digit followed by variable
-            if sym.isdigit() and nxt in ('x', 'y'):
+            # digit followed by variable (e.g. 3x, 3y, 3z)
+            if sym.isdigit() and nxt in _vars:
                 parts.append('*')
             # variable followed by digit (like x2 -> x*2... rare but handle it)
-            elif sym in ('x', 'y') and nxt.isdigit():
+            elif sym in _vars and nxt.isdigit():
                 parts.append('*')
             # closing paren followed by digit or variable
-            elif sym == ')' and (nxt.isdigit() or nxt in ('x', 'y', '(')):
+            elif sym == ')' and (nxt.isdigit() or nxt in _vars or nxt == '('):
                 parts.append('*')
             # digit or variable followed by opening paren
-            elif (sym.isdigit() or sym in ('x', 'y')) and nxt == '(':
+            elif (sym.isdigit() or sym in _vars) and nxt == '(':
                 parts.append('*')
 
     return ''.join(parts)
@@ -284,7 +302,7 @@ def solve_equation(eq_str):
     if no '=' -> just evaluate the arithmetic.
     """
     eq_str = _fix_leading_zeros(eq_str)
-    x, y = sp.symbols('x y')
+    x, y, z = sp.symbols('x y z')
 
     try:
         if '=' in eq_str:
@@ -367,7 +385,7 @@ def solve_system(equations):
     solve a system of equations (e.g. two equations, two unknowns).
     equations is a list of equation strings like ['2*x+y=10', 'x-y=2']
     """
-    x, y = sp.symbols('x y')
+    x, y, z = sp.symbols('x y z')
 
     try:
         exprs = []
