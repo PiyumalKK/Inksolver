@@ -5,6 +5,7 @@ PROJECT_PLAN.md
 __pycache__/
 *.pyc
 .venv/
+venv/
 *.egg-info/
 
 # Notebooks checkpoints
@@ -16,4 +17,22 @@ uploads/
 # OS
 Thumbs.db
 .DS_Store
-lec
+
+# Lecture / reference material
+lec/
+
+# PPTX presentation files
+*.pptx
+InkSolver_Presentation*.pptx
+
+# Presentation generation scripts
+generate_pptx.py
+generate_pptx_v2.py
+generate_pptx_v3.py
+generate_pipeline_images.py
+generate_pipeline_images_v2.py
+generate_pipeline_images_v3.py
+regen_images.py
+gen_training_curve.py
+gen_f1_chart.py
+_check_conf.py
